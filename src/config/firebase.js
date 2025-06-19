@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, Timestamp, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, Timestamp, getDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyBuzm6-xNBaEr_3iTK8Xfjv14udE_99LI8",
@@ -20,4 +20,4 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-zikr-app';
 
-export { auth, db, appId, onAuthStateChanged, signInAnonymously, signInWithCustomToken, doc, setDoc, onSnapshot, collection, query, where, Timestamp, getDoc };
+export { auth, db, appId, onAuthStateChanged, signInAnonymously, signInWithCustomToken, doc, setDoc, onSnapshot, collection, query, where, Timestamp, getDoc, addDoc, updateDoc, deleteDoc };

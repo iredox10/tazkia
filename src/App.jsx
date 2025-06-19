@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { auth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, db, appId, doc, setDoc, getDoc, Timestamp } from './config/firebase';
 import HomePage from './pages/HomePage';
 import StatsPage from './pages/StatsPage';
+import TodayPage from './pages/TodayPage'; // Import the new page
 import Navbar from './components/Navbar';
 
 function App() {
@@ -10,13 +10,11 @@ function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [currentPage, setCurrentPage] = useState('home');
 
-  // Lifted state
-  const [activeZikr, setActiveZikr] = useState(null); // Start as null to indicate loading
+  const [activeZikr, setActiveZikr] = useState(null);
   const [inputValue, setInputValue] = useState('');
 
   const zikrCollectionPath = useMemo(() => userId ? `/artifacts/${appId}/users/${userId}/zikr-history` : null, [userId]);
 
-  // --- Authentication Handling ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -38,7 +36,6 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // --- Data Management Functions ---
   const loadZikrData = useCallback(async (zikrName) => {
     if (!zikrCollectionPath) return;
     const docId = `${zikrName}-${new Date().toISOString().split('T')[0]}`;
@@ -62,7 +59,6 @@ function App() {
     setInputValue(zikrData.name);
   }, [zikrCollectionPath]);
 
-  // --- Initial data load after user is authenticated ---
   useEffect(() => {
     if (userId) {
       loadZikrData('SubhanAllah');
@@ -82,9 +78,9 @@ function App() {
   const handleSelectZikr = (zikrData) => {
     setActiveZikr(zikrData);
     setInputValue(zikrData.name);
+    setCurrentPage('home'); // Switch back to home page to continue
   }
 
-  // --- Loading Screen ---
   if (!isAuthReady || !userId || !activeZikr) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#121212]">
@@ -104,16 +100,16 @@ function App() {
         <div className="max-w-2xl mx-auto">
           {currentPage === 'home' && (
             <HomePage
-              userId={userId}
               activeZikr={activeZikr}
+              userId={userId}
               setActiveZikr={setActiveZikr}
               inputValue={inputValue}
               setInputValue={setInputValue}
               loadZikrData={loadZikrData}
               saveZikr={saveZikr}
-              onSelectZikr={handleSelectZikr}
             />
           )}
+          {currentPage === 'today' && <TodayPage userId={userId} onSelectZikr={handleSelectZikr} />}
           {currentPage === 'stats' && <StatsPage userId={userId} />}
         </div>
       </main>

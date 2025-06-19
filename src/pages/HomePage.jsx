@@ -1,13 +1,15 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Repeat, Settings, BookOpen, AlertTriangle, Check, Zap, Activity, Award, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Repeat, Settings, BookOpen, AlertTriangle, Award, RefreshCw } from 'lucide-react';
 import * as Tone from 'tone';
-import { db, appId, doc, setDoc, getDoc, Timestamp, collection, query, where, onSnapshot } from '../config/firebase';
 import ZikrCounter from '../components/ZikrCounter';
 import PresetModal from '../components/PresetModal';
 import TargetModal from '../components/TargetModal';
+import AddCustomZikrModal from '../components/AddCustomZikrModal';
+import EditCustomZikrModal from '../components/EditCustomZikrModal';
+import { db, appId, doc, deleteDoc } from '../config/firebase';
 
-// --- Reusable Modal Components ---
+// --- Reusable Confirmation Modal ---
 const ConfirmationModal = ({ isVisible, icon: Icon, color, title, message, confirmText, onConfirm, onCancel }) => {
   if (!isVisible) return null;
   return (
@@ -25,6 +27,7 @@ const ConfirmationModal = ({ isVisible, icon: Icon, color, title, message, confi
   );
 }
 
+// --- Target Reached Modal ---
 const TargetReachedModal = ({ isVisible, onContinue, onNew, zikrName }) => {
   if (!isVisible) return null;
   return (
@@ -42,89 +45,34 @@ const TargetReachedModal = ({ isVisible, onContinue, onNew, zikrName }) => {
   );
 };
 
-
-// --- Today's Zikr Progress List Component ---
-const TodaysZikrList = ({ userId, onSelectZikr }) => {
-  const [todaysZikr, setTodaysZikr] = useState([]);
-  const zikrCollectionPath = useMemo(() => userId ? `/artifacts/${appId}/users/${userId}/zikr-history` : null, [userId]);
-
-  useEffect(() => {
-    if (!zikrCollectionPath) return;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayTimestamp = Timestamp.fromDate(today);
-    const q = query(collection(db, zikrCollectionPath), where("date", "==", todayTimestamp));
-
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const zikrList = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setTodaysZikr(zikrList);
-    });
-    return () => unsubscribe();
-  }, [zikrCollectionPath, userId]);
-
-  const inProgress = todaysZikr.filter(z => z.count < z.target);
-  const completed = todaysZikr.filter(z => z.count >= z.target);
-
-  const handleSelect = (zikrDoc) => {
-    onSelectZikr({
-      name: zikrDoc.name,
-      count: zikrDoc.count || 0,
-      target: zikrDoc.target || 100,
-      deadline: zikrDoc.deadline ? new Date(zikrDoc.deadline.seconds * 1000).toISOString().substring(0, 16) : '',
-      reminderInterval: zikrDoc.reminderInterval || 0,
-    });
-  }
-
-  if (todaysZikr.length === 0) return null;
-
-  return (
-    <div className="bg-[#1E1E1E] rounded-3xl p-6 mt-8">
-      <h2 className="text-xl font-semibold flex items-center mb-4"><Activity className="w-5 h-5 mr-2 text-[#34D399]" /> Today's Progress</h2>
-      {inProgress.length > 0 && (
-        <div className="mb-4">
-          <h3 className="text-sm font-semibold text-yellow-400 mb-2">In Progress</h3>
-          <div className="space-y-2">{inProgress.map(zikr => (<button key={zikr.id} onClick={() => handleSelect(zikr)} className="w-full text-left p-3 bg-[#374151] rounded-xl hover:bg-[#4B5563] transition-colors flex items-center justify-between"><div><p className="font-medium">{zikr.name}</p><p className="text-xs text-gray-400">{zikr.count} / {zikr.target}</p></div><Zap className="w-5 h-5 text-yellow-400" /></button>))}</div>
-        </div>
-      )}
-      {completed.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-green-400 mb-2">Completed</h3>
-          <div className="space-y-2">{completed.map(zikr => (<div key={zikr.id} className="w-full text-left p-3 bg-[#374151] bg-opacity-50 rounded-xl flex items-center justify-between"><div><p className="font-medium text-gray-400 line-through">{zikr.name}</p><p className="text-xs text-gray-500">{zikr.count} / {zikr.target}</p></div><Check className="w-5 h-5 text-green-400" /></div>))}</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // --- HomePage Component ---
-const HomePage = ({ userId, activeZikr, setActiveZikr, inputValue, setInputValue, loadZikrData, saveZikr, onSelectZikr }) => {
+const HomePage = ({ userId, activeZikr, setActiveZikr, inputValue, setInputValue, loadZikrData, saveZikr }) => {
+  // --- State Management for ALL Modals ---
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [showPresetModal, setShowPresetModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingZikr, setEditingZikr] = useState(null);
+  const [deletingZikr, setDeletingZikr] = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showTargetReached, setShowTargetReached] = useState(false);
   const [showConfirmSwitch, setShowConfirmSwitch] = useState(false);
   const [nextZikr, setNextZikr] = useState(null);
 
   const playSound = () => {
-    const synth = new Tone.Synth({
-      oscillator: { type: 'sine' },
-      envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 }
-    }).toDestination();
+    if (typeof Tone !== 'undefined' && Tone.context.state !== 'running') {
+      Tone.start();
+    }
+    const synth = new Tone.Synth().toDestination();
     synth.triggerAttackRelease("C5", "8n");
   };
 
   const handleIncrement = useCallback(() => {
-    if (showTargetReached) return; // Don't increment if modal is shown
-
+    if (showTargetReached) return;
     const newCount = activeZikr.count + 1;
     const updatedZikr = { ...activeZikr, count: newCount };
     setActiveZikr(updatedZikr);
     saveZikr(updatedZikr);
-
-    if (newCount === activeZikr.target) {
-      playSound();
-      setShowTargetReached(true);
-    }
+    if (newCount === activeZikr.target) { playSound(); setShowTargetReached(true); }
   }, [activeZikr, saveZikr, setActiveZikr, showTargetReached]);
 
   const handleReset = () => {
@@ -137,20 +85,18 @@ const HomePage = ({ userId, activeZikr, setActiveZikr, inputValue, setInputValue
   const attemptToSwitchZikr = (newZikrLoader) => {
     const isInProgress = activeZikr.count > 0 && activeZikr.count < activeZikr.target;
     if (isInProgress) {
-      setNextZikr(() => newZikrLoader); // Store the function that will load the next zikr
+      setNextZikr(() => newZikrLoader);
       setShowConfirmSwitch(true);
     } else {
-      newZikrLoader(); // If not in progress, switch immediately
+      newZikrLoader();
     }
   };
 
   const confirmAndSwitch = () => {
-    if (nextZikr) {
-      nextZikr();
-    }
+    if (nextZikr) nextZikr();
     setShowConfirmSwitch(false);
     setNextZikr(null);
-  }
+  };
 
   const handleSelectPreset = (preset) => {
     attemptToSwitchZikr(() => {
@@ -168,7 +114,14 @@ const HomePage = ({ userId, activeZikr, setActiveZikr, inputValue, setInputValue
     }
   };
 
-  if (!activeZikr) { return <div className="bg-[#1E1E1E] rounded-3xl p-6 md:p-8 text-center h-96 flex items-center justify-center"><p className="text-gray-400">Loading...</p></div>; }
+  const handleDeleteZikr = async () => {
+    if (!deletingZikr || !userId) return;
+    const docRef = doc(db, `/artifacts/${appId}/users/${userId}/custom_zikr`, deletingZikr.id);
+    try {
+      await deleteDoc(docRef);
+      setDeletingZikr(null);
+    } catch (error) { console.error("Error deleting document: ", error); }
+  };
 
   const progress = activeZikr.target > 0 ? Math.min((activeZikr.count / activeZikr.target) * 100, 100) : 0;
 
@@ -184,13 +137,16 @@ const HomePage = ({ userId, activeZikr, setActiveZikr, inputValue, setInputValue
         </div>
       </div>
 
-      <TodaysZikrList userId={userId} onSelectZikr={onSelectZikr} />
+      {/* All Modals are now rendered and managed by the HomePage */}
+      <PresetModal isVisible={showPresetModal} onClose={() => setShowPresetModal(false)} onSelect={handleSelectPreset} userId={userId} onAdd={() => setShowAddModal(true)} onEdit={(zikr) => setEditingZikr(zikr)} onDelete={(zikr) => setDeletingZikr(zikr)} />
+      <AddCustomZikrModal isVisible={showAddModal} onClose={() => setShowAddModal(false)} userId={userId} />
+      <EditCustomZikrModal isVisible={!!editingZikr} onClose={() => setEditingZikr(null)} userId={userId} zikrToEdit={editingZikr} />
+      <TargetModal isVisible={showTargetModal} onClose={() => setShowTargetModal(false)} onSave={(data) => { const updated = { ...activeZikr, ...data }; setActiveZikr(updated); saveZikr(updated); setShowTargetModal(false) }} currentZikr={activeZikr} />
 
+      <ConfirmationModal isVisible={!!deletingZikr} icon={AlertTriangle} color="red" title="Delete Zikr?" message={`Are you sure you want to permanently delete "${deletingZikr?.name}"?`} confirmText="Delete" onConfirm={handleDeleteZikr} onCancel={() => setDeletingZikr(null)} />
       <ConfirmationModal isVisible={showResetConfirm} icon={AlertTriangle} color="yellow" title="Reset Counter?" message="Are you sure you want to reset your current count to zero?" confirmText="Reset" onConfirm={handleReset} onCancel={() => setShowResetConfirm(false)} />
       <ConfirmationModal isVisible={showConfirmSwitch} icon={AlertTriangle} color="yellow" title="Switch Zikr?" message="Your current Zikr is in progress. Are you sure you want to switch? Your progress will be saved." confirmText="Switch" onConfirm={confirmAndSwitch} onCancel={() => setShowConfirmSwitch(false)} />
       <TargetReachedModal isVisible={showTargetReached} zikrName={activeZikr.name} onContinue={() => setShowTargetReached(false)} onNew={() => { setShowTargetReached(false); setShowPresetModal(true); }} />
-      <PresetModal isVisible={showPresetModal} onClose={() => setShowPresetModal(false)} onSelect={handleSelectPreset} />
-      <TargetModal isVisible={showTargetModal} onClose={() => setShowTargetModal(false)} onSave={(data) => { const updated = { ...activeZikr, ...data }; setActiveZikr(updated); saveZikr(updated); setShowTargetModal(false) }} currentZikr={activeZikr} />
     </>
   );
 };
