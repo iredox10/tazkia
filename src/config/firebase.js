@@ -1,7 +1,6 @@
-
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot, collection, query, Timestamp, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, Timestamp, getDoc } from 'firebase/firestore';
 
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyBuzm6-xNBaEr_3iTK8Xfjv14udE_99LI8",
@@ -13,9 +12,12 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
   measurementId: "G-7R6PLMR0C3"
 };
 
+// This logic is for the platform; you can remove it for your local setup.
+// const platformConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-zikr-app';
 
-export { auth, db, appId, onAuthStateChanged, signInAnonymously, signInWithCustomToken, doc, setDoc, onSnapshot, collection, query, Timestamp, getDoc };
+export { auth, db, appId, onAuthStateChanged, signInAnonymously, signInWithCustomToken, doc, setDoc, onSnapshot, collection, query, where, Timestamp, getDoc };
