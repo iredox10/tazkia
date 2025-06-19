@@ -1,9 +1,12 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { auth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, db, appId, doc, setDoc, getDoc, Timestamp } from './config/firebase';
 import HomePage from './pages/HomePage';
 import StatsPage from './pages/StatsPage';
-import TodayPage from './pages/TodayPage'; // Import the new page
+import TodayPage from './pages/TodayPage';
 import Navbar from './components/Navbar';
+import LoadingScreen from './components/LoadingScreen';
+import Header from './components/Header'; // Import the new Header component
 
 function App() {
   const [userId, setUserId] = useState(null);
@@ -78,30 +81,23 @@ function App() {
   const handleSelectZikr = (zikrData) => {
     setActiveZikr(zikrData);
     setInputValue(zikrData.name);
-    setCurrentPage('home'); // Switch back to home page to continue
+    setCurrentPage('home');
   }
 
   if (!isAuthReady || !userId || !activeZikr) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-[#121212]">
-        <div className="text-lg font-semibold text-gray-300">Loading...</div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (
     <div className="min-h-screen bg-[#121212] text-gray-200 font-sans flex flex-col">
-      <header className="p-4 sm:p-6 flex justify-between items-center shrink-0">
-        <h1 className="text-xl font-bold text-gray-300">Tazkia</h1>
-        <p className="text-sm text-gray-400">Peace for your soul</p>
-      </header>
+      <Header /> {/* Use the new Header component */}
 
       <main className="flex-grow p-4 sm:p-6 pt-0">
         <div className="max-w-2xl mx-auto">
           {currentPage === 'home' && (
             <HomePage
-              activeZikr={activeZikr}
               userId={userId}
+              activeZikr={activeZikr}
               setActiveZikr={setActiveZikr}
               inputValue={inputValue}
               setInputValue={setInputValue}
