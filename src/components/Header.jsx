@@ -5,7 +5,7 @@ import { User, Download } from 'lucide-react';
 
 const Header = () => {
   const [greeting, setGreeting] = useState('');
-  const [installPrompt, setInstallPrompt] = useState(null);
+  const [installPrompt, setInstallPrompt] = useState(true);
 
   useEffect(() => {
     const getGreeting = () => {
